@@ -183,12 +183,8 @@ CREATE FUNCTION dbo.NumberToWords(@dt int)
     WHEN 99 THEN N'Девяносто девять '
     ELSE ' '
 	END
-
 	RETURN @str
-
 	END
-
-
 GO
 
 Select dbo.NumberToWords(23);
@@ -207,3 +203,56 @@ RETURN
 
 
 Select* FROM Employees.getSalary2('1997-06-26','1998-06-26','10434')
+
+
+
+4.
+CREATE FUNCTION [dbo].[FUNCTION_5_4_Zavdannya] (@date DATE)
+   RETURNS TABLE
+    AS
+   RETURN
+   (
+        WITH DateSeries(d1,d2)
+        AS (
+            SELECT @date as d1, EOMONTH(@date) as d2
+            UNION ALL
+            SELECT DATEADD(mm, 1, d1), EOMONTH(DATEADD(mm,1,d1))
+                FROM DateSeries
+                WHERE d1<DATEADD(mm, -1, DATEADD(yy, 1, @date))
+        )
+        SELECT d.d1 AS DATE_START, d.d2 AS DATE_END, a.CITY, SUM(h.TotalDue) AS SUM
+            FROM DateSeries d, SalesLT.SalesOrderHeader h
+            INNER JOIN SalesLT.Address a ON h.BillToAddressID=a.AddressID
+            WHERE h.OrderDate BETWEEN d.d1 AND d.d2
+            GROUP BY d.d1, d.d2, a.City
+   )
+GO
+select * from dbo.FUNCTION_5_5_Zavdannya(CAST('2013-01-01' AS DATE))
+GO
+
+5.
+DECLARE Generate_SubTotal CURSOR FOR
+    SELECT SLT_SOH.SalesOrderID
+    FROM SalesLT.SalesOrderHeader as SLT_SOH
+OPEN Generate_SubTotal;
+DECLARE @SOH_ID INT
+    FETCH NEXT FROM Generate_SubTotal INTO @SOH_ID;
+WHILE @@FETCH_STATUS = 0
+    BEGIN
+        DECLARE @sumOfLineTotals MONEY;
+        SET @sumOfLineTotals = (SELECT SUM(LineTotal)
+                from SalesLT.SalesOrderDetail
+                where SalesOrderID = @SOH_ID)
+
+        UPDATE SalesLT.SalesOrderHeader
+            SET SubTotal =
+                CASE WHEN @sumOfLineTotals IS NULL THEN 0
+                    WHEN @sumOfLineTotals != NULL THEN @sumOfLineTotals
+                END
+            WHERE SalesOrderID = @SOH_ID
+        PRINT @sumOfLineTotals;
+        FETCH NEXT FROM Generate_SubTotal INTO @SOH_ID
+    END;
+CLOSE Generate_SubTotal;
+DEALLOCATE Generate_SubTotal;
+GO
